@@ -5,6 +5,9 @@
 **APIs Used:** Gmail API, Google Sheets API  
 **Authentication:** OAuth 2.0 (Desktop Flow)
 
+🎥 Demo Video: <https://drive.google.com/file/d/1lhSwFHjsY92AkM5a7vj6pQXcqGZHMPYu/view?usp=sharing>
+
+
 ---
 
 ## 📖 Project Overview
