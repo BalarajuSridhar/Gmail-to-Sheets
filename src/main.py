@@ -1,7 +1,7 @@
+# main.py
 import sys
 from pathlib import Path
 import time
-import logging
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -10,59 +10,73 @@ from src.sheets_service import SheetsService
 from src.email_parser import EmailParser
 from src.state_manager import StateManager
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 def main():
-    logger.info("Starting Gmail to Sheets automation...")
+    print("Starting Gmail to Sheets automation...")
+    print("=" * 50)
     
     # Configuration
-    SPREADSHEET_ID = "1m7JX9A9I1JiHjzk3Asc-MLXIdBLZJioWBY37kZDbIHw"
+    SPREADSHEET_ID = "1m7JX9A9I1JiHjzk3Asc-MLXIdBLZJioWBY37kZDbIHw"  # Your Sheet ID
     SHEET_NAME = "Sheet1"  # Your sheet tab name
     
     try:
         # Initialize services
+        print("1. Authenticating with Gmail...")
         gmail = GmailService()
+        
+        print("2. Initializing Sheets service...")
         sheets = SheetsService(gmail.creds)
+        
+        print("3. Formatting Google Sheet...")
+        # Format or create sheet with proper headers
+        sheets.create_or_reset_sheet(SPREADSHEET_ID, SHEET_NAME)
+        
         parser = EmailParser()
         state = StateManager()
         
         # Load last processed date
         last_processed = state.load_state()
-        logger.info(f"Last processed: {last_processed}")
+        print(f"4. Last processed: {last_processed}")
         
         # Get unread emails since last run
+        print("5. Fetching unread emails...")
         messages = gmail.get_unread_emails(last_processed)
         
         if not messages:
-            logger.info("No new unread emails to process.")
+            print("✓ No new unread emails to process.")
             return
         
-        logger.info(f"Found {len(messages)} unread messages")
+        print(f"6. Found {len(messages)} unread messages")
         
         # Get existing message IDs to prevent duplicates
         existing_ids = sheets.get_existing_message_ids(SPREADSHEET_ID, SHEET_NAME)
+        print(f"7. Found {len(existing_ids)} already processed emails")
         
         processed_count = 0
         latest_email_date = None
         
         # Process emails (limit to reasonable number)
-        for i, msg in enumerate(messages[:20]):  # Process max 20 emails per run
+        max_emails = min(10, len(messages))  # Process max 10 emails
+        print(f"8. Processing {max_emails} emails...")
+        
+        for i, msg in enumerate(messages[:max_emails]):
             msg_id = msg['id']
             
             # Skip if already processed
             if msg_id in existing_ids:
-                logger.debug(f"Skipping already processed email: {msg_id}")
+                print(f"   [{i+1}/{max_emails}] Skipping already processed: {msg_id[:10]}...")
                 continue
             
             # Get email details
             email_details = gmail.get_email_details(msg_id)
             if not email_details:
+                print(f"   [{i+1}/{max_emails}] Failed to fetch email details")
                 continue
             
             # Parse email
             parsed_email = parser.parse_email(email_details)
+            parsed_email['message_id'] = msg_id  # Add message_id for duplicate tracking
+            
+            print(f"   [{i+1}/{max_emails}] Processing: {parsed_email['subject'][:40]}...")
             
             # Append to Google Sheets
             success = sheets.append_row(SPREADSHEET_ID, SHEET_NAME, parsed_email)
@@ -76,9 +90,9 @@ def main():
                 if latest_email_date is None or parsed_email['date'] > latest_email_date:
                     latest_email_date = parsed_email['date']
                 
-                logger.info(f"Processed [{i+1}/{len(messages[:20])}]: {parsed_email['subject'][:50]}...")
+                print(f"     ✓ Added to sheet")
             else:
-                logger.error(f"Failed to append email: {msg_id}")
+                print(f"     ✗ Failed to add to sheet")
             
             # Rate limiting
             time.sleep(0.5)
@@ -89,10 +103,13 @@ def main():
         elif processed_count > 0:
             state.save_state()
         
-        logger.info(f"Processing complete! {processed_count} emails added to sheet.")
+        print("\n" + "=" * 50)
+        print(f"✅ Processing complete! {processed_count} emails added to sheet.")
+        print(f"📊 Sheet URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit")
+        print("=" * 50)
         
     except Exception as e:
-        logger.error(f"Error in main process: {e}")
+        print(f"\n✗ Error in main process: {e}")
         import traceback
         traceback.print_exc()
 
